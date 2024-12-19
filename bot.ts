@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
-import { CallbackQuery } from 'telegraf/typings/core/types/typegram';
+import { type CallbackQuery } from 'telegraf/types';
 import dotenv from 'dotenv';
-import { projects, Project } from './projectsConfig';
+import { projects } from './projectsConfig';
 import { airdropWorker } from './airdropWorker'; // Import the worker
 
 // Load environment variables from .env.local

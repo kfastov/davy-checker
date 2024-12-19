@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { Project } from './projectsConfig';
+import { type Project } from './projectsConfig';
 
 interface Task {
   project: Project;

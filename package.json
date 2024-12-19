@@ -2,8 +2,10 @@
   "name": "davy-checker",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
+  "module": "bot.ts",
   "scripts": {
-    "start": "ts-node bot.ts",
+    "start": "bun run bot.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,13 +14,14 @@
   "description": "",
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",
-    "@types/node": "^22.10.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "@types/bun": "latest"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
     "node-fetch": "^3.3.2",
     "telegraf": "^4.16.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.7.2"
   }
 }
