@@ -10,6 +10,9 @@ dotenv.config({ path: '.env.local' });
 // Use the bot token from the environment variable
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN as string);
 
+// Constant for the maximum number of addresses
+const MAX_ADDRESSES = 80;
+
 // Start command
 bot.start((ctx) => {
   ctx.reply('Добро пожаловать! Проверьте свою возможность участия в airdrop, выбрав проект.');
@@ -44,11 +47,23 @@ bot.on('callback_query', async (ctx) => {
     const project = projects.find((p) => p.name === projectName);
 
     if (project) {
-      ctx.reply(`Вы выбрали ${project.name}. Пожалуйста, введите ваш адрес:`);
+      ctx.reply(`Вы выбрали ${project.name}. Пожалуйста, введите ваши адреса (каждый адрес на новой строке, максимум ${MAX_ADDRESSES}):`);
       bot.on('text', async (ctx) => {
-        const address = ctx.message.text;
-        const airdropAmount = await checkAirdropEligibility(project, address);
-        ctx.reply(`Ваше количество airdrop для ${project.name} составляет: ${airdropAmount}`);
+        const addresses = ctx.message.text.split('\n').map(addr => addr.trim()).filter(addr => addr);
+        
+        if (addresses.length > MAX_ADDRESSES) {
+          ctx.reply(`Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`);
+          return;
+        }
+
+        const results = [];
+        for (const address of addresses) {
+          const airdropAmount = await checkAirdropEligibility(project, address);
+          results.push(`Адрес: ${address}, Airdrop: ${airdropAmount}`);
+        }
+
+        const responseMessage = `Результаты для ${project.name}:\n` + results.join('\n');
+        ctx.reply(responseMessage);
       });
     }
   }
