@@ -2,7 +2,7 @@ import { Telegraf } from 'telegraf';
 import { type CallbackQuery } from 'telegraf/types';
 import dotenv from 'dotenv';
 import { projects } from './projectsConfig';
-import { airdropWorker } from './airdropWorker'; // Import the worker
+import { airdropWorker } from './airdropWorker';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -14,19 +14,18 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN as string);
 const MAX_ADDRESSES = 80;
 
 // Start command
-bot.start((ctx) => {
-  ctx.reply('Добро пожаловать! Проверьте свою возможность участия в airdrop, выбрав проект.');
+bot.start(async (ctx) => {
   sendProjectList(ctx);
 });
 
 // Function to send the list of projects
-function sendProjectList(ctx: any) {
+async function sendProjectList(ctx: any) {
   const projectButtons = projects.map((project) => ({
     text: project.name,
-    callback_data: project.name,
+    callback_data: `project:${project.name}`,
   }));
 
-  ctx.reply('Выберите проект:', {
+  await ctx.reply('Добро пожаловать! Выберите проект для проверки возможности участия в airdrop:', {
     reply_markup: {
       inline_keyboard: [projectButtons],
     },
@@ -38,23 +37,51 @@ function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
   return (query as CallbackQuery.DataQuery).data !== undefined;
 }
 
-// Handle project selection
+// Handle project selection and back button
 bot.on('callback_query', async (ctx) => {
   const callbackQuery = ctx.callbackQuery;
   
-  if (isDataQuery(callbackQuery)) {
-    const projectName = callbackQuery.data;
+  if (!isDataQuery(callbackQuery)) return;
+
+  const data = callbackQuery.data;
+  
+  // Handle back button
+  if (data === 'back') {
+    await ctx.deleteMessage();
+    return sendProjectList(ctx);
+  }
+
+  // Handle project selection
+  if (data.startsWith('project:')) {
+    const projectName = data.replace('project:', '');
     const project = projects.find((p) => p.name === projectName);
 
     if (project) {
-      ctx.reply(`Вы выбрали ${project.name}. Пожалуйста, введите ваши адреса (каждый адрес на новой строке, максимум ${MAX_ADDRESSES}):`);
+      // Delete the previous message
+      await ctx.deleteMessage();
+
+      const promptMessage = await ctx.reply(
+        `Вы выбрали ${project.name}. Пожалуйста, введите ваши адреса (каждый адрес на новой строке, максимум ${MAX_ADDRESSES}):`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Назад', callback_data: 'back' }]
+            ]
+          }
+        }
+      );
+
       bot.on('text', async (ctx) => {
         const addresses = ctx.message.text.split('\n').map(addr => addr.trim()).filter(addr => addr);
         
         if (addresses.length > MAX_ADDRESSES) {
-          ctx.reply(`Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`);
+          await ctx.reply(`Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`);
           return;
         }
+
+        // Delete the prompt message and user's input
+        await ctx.telegram.deleteMessage(ctx.chat.id, promptMessage.message_id);
+        await ctx.deleteMessage();
 
         const results = await Promise.all(addresses.map(address => 
           airdropWorker.addTask(project, address)
@@ -63,11 +90,17 @@ bot.on('callback_query', async (ctx) => {
         ));
 
         const responseMessage = `Результаты для ${project.name}:\n` + results.join('\n');
-        ctx.reply(responseMessage);
+        await ctx.reply(responseMessage, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Назад', callback_data: 'back' }]
+            ]
+          }
+        });
       });
     }
   }
 });
 
 // Launch the bot
-bot.launch(); 
+bot.launch();
