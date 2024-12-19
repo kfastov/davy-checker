@@ -1,8 +1,8 @@
 import { Telegraf } from 'telegraf';
-import fetch from 'node-fetch';
 import { CallbackQuery } from 'telegraf/typings/core/types/typegram';
 import dotenv from 'dotenv';
-import { projects, Project } from './projectsConfig'; // Import projects and Project interface
+import { projects, Project } from './projectsConfig';
+import { airdropWorker } from './airdropWorker'; // Import the worker
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -56,11 +56,11 @@ bot.on('callback_query', async (ctx) => {
           return;
         }
 
-        const results = [];
-        for (const address of addresses) {
-          const airdropAmount = await checkAirdropEligibility(project, address);
-          results.push(`Адрес: ${address}, Airdrop: ${airdropAmount}`);
-        }
+        const results = await Promise.all(addresses.map(address => 
+          airdropWorker.addTask(project, address)
+            .then((airdropAmount: string) => `Адрес: ${address}, Airdrop: ${airdropAmount}`)
+            .catch(() => `Адрес: ${address}, Ошибка при проверке возможности`)
+        ));
 
         const responseMessage = `Результаты для ${project.name}:\n` + results.join('\n');
         ctx.reply(responseMessage);
@@ -68,22 +68,6 @@ bot.on('callback_query', async (ctx) => {
     }
   }
 });
-
-// Function to check airdrop eligibility
-async function checkAirdropEligibility(project: Project, address: string): Promise<string> {
-  try {
-    // Replace the placeholder with the actual user address
-    const url = `${project.apiEndpoint}${address}`;
-    const response = await fetch(url);
-    const data = await response.json();
-
-    // Use the project's parseResponse function
-    return project.parseResponse(data);
-  } catch (error) {
-    console.error('Ошибка при проверке возможности участия в airdrop:', error);
-    return 'Ошибка при проверке возможности';
-  }
-}
 
 // Launch the bot
 bot.launch(); 
