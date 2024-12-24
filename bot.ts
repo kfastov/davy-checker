@@ -3,6 +3,7 @@ import { type CallbackQuery } from 'telegraf/types';
 import dotenv from 'dotenv';
 import { projects } from './projectsConfig';
 import { airdropWorker } from './airdropWorker';
+import { userDb, UserRole } from './database';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -13,6 +14,62 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN as string);
 // Constant for the maximum number of addresses
 const MAX_ADDRESSES = 80;
 
+// Middleware для проверки прав админа
+const requireAdmin = async (ctx: any, next: () => Promise<void>) => {
+  const userId = ctx.from?.id;
+  if (!userId || !userDb.isAdmin(userId)) {
+    await ctx.reply('У вас нет прав для выполнения этой команды.');
+    return;
+  }
+  return next();
+};
+
+// Middleware для проверки прав овнера
+const requireOwner = async (ctx: any, next: () => Promise<void>) => {
+  const userId = ctx.from?.id;
+  if (!userId || !userDb.isOwner(userId)) {
+    await ctx.reply('Только владелец бота может выполнять эту команду.');
+    return;
+  }
+  return next();
+};
+
+// Команда для добавления админа (только для овнера)
+bot.command('addadmin', requireOwner, async (ctx) => {
+  const args = ctx.message.text.split(' ');
+  if (args.length !== 2) {
+    await ctx.reply('Использование: /addadmin <user_id>');
+    return;
+  }
+
+  const targetUserId = parseInt(args[1]);
+  if (isNaN(targetUserId)) {
+    await ctx.reply('Некорректный ID пользователя');
+    return;
+  }
+
+  userDb.setUserRole(targetUserId, UserRole.ADMIN);
+  await ctx.reply(`Пользователь ${targetUserId} назначен администратором.`);
+});
+
+// Команда для удаления админа (только для овнера)
+bot.command('removeadmin', requireOwner, async (ctx) => {
+  const args = ctx.message.text.split(' ');
+  if (args.length !== 2) {
+    await ctx.reply('Использование: /removeadmin <user_id>');
+    return;
+  }
+
+  const targetUserId = parseInt(args[1]);
+  if (isNaN(targetUserId)) {
+    await ctx.reply('Некорректный ID пользователя');
+    return;
+  }
+
+  userDb.removeUserRole(targetUserId);
+  await ctx.reply(`Пользователь ${targetUserId} больше не является администратором.`);
+});
+
 // Start command
 bot.start(async (ctx) => {
   sendProjectList(ctx);
@@ -20,14 +77,12 @@ bot.start(async (ctx) => {
 
 // Function to send the list of projects
 async function sendProjectList(ctx: any) {
-  const projectButtons = projects.map((project) => ({
-    text: project.name,
-    callback_data: `project:${project.name}`,
-  }));
-
   await ctx.reply('Добро пожаловать! Выберите проект для проверки возможности участия в airdrop:', {
     reply_markup: {
-      inline_keyboard: [projectButtons],
+      inline_keyboard: [projects.map((project) => ({
+        text: project.name,
+        callback_data: `project:${project.name}`,
+      }))],
     },
   });
 }
@@ -47,8 +102,15 @@ bot.on('callback_query', async (ctx) => {
   
   // Handle back button
   if (data === 'back') {
-    await ctx.deleteMessage();
-    return sendProjectList(ctx);
+    await ctx.editMessageText('Добро пожаловать! Выберите проект для проверки возможности участия в airdrop:', {
+      reply_markup: {
+        inline_keyboard: [projects.map((project) => ({
+          text: project.name,
+          callback_data: `project:${project.name}`,
+        }))],
+      },
+    });
+    return;
   }
 
   // Handle project selection
@@ -57,10 +119,8 @@ bot.on('callback_query', async (ctx) => {
     const project = projects.find((p) => p.name === projectName);
 
     if (project) {
-      // Delete the previous message
-      await ctx.deleteMessage();
-
-      const promptMessage = await ctx.reply(
+      // Вместо удаления и создания нового сообщения, редактируем текущее
+      await ctx.editMessageText(
         `Вы выбрали ${project.name}. Пожалуйста, введите ваши адреса (каждый адрес на новой строке, максимум ${MAX_ADDRESSES}):`,
         {
           reply_markup: {
@@ -79,8 +139,7 @@ bot.on('callback_query', async (ctx) => {
           return;
         }
 
-        // Delete the prompt message and user's input
-        await ctx.telegram.deleteMessage(ctx.chat.id, promptMessage.message_id);
+        // Delete only user's input message
         await ctx.deleteMessage();
 
         const results = await Promise.all(addresses.map(address => 
@@ -90,13 +149,21 @@ bot.on('callback_query', async (ctx) => {
         ));
 
         const responseMessage = `Результаты для ${project.name}:\n` + results.join('\n');
-        await ctx.reply(responseMessage, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Назад', callback_data: 'back' }]
-            ]
+        
+        // Edit the original message instead of creating a new one
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          callbackQuery.message?.message_id,
+          undefined,
+          responseMessage,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'Назад', callback_data: 'back' }]
+              ]
+            }
           }
-        });
+        );
       });
     }
   }
