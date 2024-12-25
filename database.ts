@@ -5,6 +5,14 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+interface CountResult {
+  count: number;
+}
+
+interface RoleResult {
+  role: string;
+}
+
 export class UserDatabase {
   private db: Database;
 
@@ -24,13 +32,17 @@ export class UserDatabase {
     `);
 
     // Проверяем, есть ли уже овнер в базе
-    const ownerExists = this.db.query("SELECT COUNT(*) as count FROM user_roles WHERE role = 'owner'").get();
+    const ownerExists = this.db.query("SELECT COUNT(*) as count FROM user_roles WHERE role = 'owner'").get() as CountResult;
     
     // Если овнера нет, добавляем дефолтного (ID нужно будет заменить на реальный)
     if (ownerExists && ownerExists.count === 0) {
+      const ownerId = Number(process.env.DEFAULT_OWNER_ID);
+      if (isNaN(ownerId)) {
+        throw new Error("DEFAULT_OWNER_ID must be set in environment variables");
+      }
       this.db.run(
         "INSERT INTO user_roles (user_id, role) VALUES (?, ?)",
-        [process.env.DEFAULT_OWNER_ID, UserRole.OWNER]
+        [ownerId, UserRole.OWNER]
       );
     }
   }
@@ -38,7 +50,7 @@ export class UserDatabase {
   getUserRole(userId: number): UserRole | null {
     const result = this.db.query(
       "SELECT role FROM user_roles WHERE user_id = ?"
-    ).get(userId);
+    ).get(userId) as RoleResult | null;
 
     return result ? (result.role as UserRole) : null;
   }
@@ -51,7 +63,7 @@ export class UserDatabase {
   }
 
   removeUserRole(userId: number): void {
-    this.db.run("DELETE FROM user_roles WHERE user_id = ?", userId);
+    this.db.run("DELETE FROM user_roles WHERE user_id = ?", [userId]);
   }
 
   isOwner(userId: number): boolean {
