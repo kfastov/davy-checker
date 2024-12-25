@@ -31,19 +31,24 @@ export class UserDatabase {
       );
     `);
 
-    // Проверяем, есть ли уже овнер в базе
-    const ownerExists = this.db.query("SELECT COUNT(*) as count FROM user_roles WHERE role = 'owner'").get() as CountResult;
+    // Check if owner exists
+    const ownerExists = this.db.prepare('SELECT COUNT(*) as count FROM user_roles WHERE role = ?').get('OWNER') as CountResult;
     
-    // Если овнера нет, добавляем дефолтного (ID нужно будет заменить на реальный)
     if (ownerExists && ownerExists.count === 0) {
       const ownerId = Number(process.env.DEFAULT_OWNER_ID);
       if (isNaN(ownerId)) {
         throw new Error("DEFAULT_OWNER_ID must be set in environment variables");
       }
-      this.db.run(
-        "INSERT INTO user_roles (user_id, role) VALUES (?, ?)",
-        [ownerId, UserRole.OWNER]
-      );
+      
+      // Add check to ensure user doesn't already exist
+      const userExists = this.db.prepare('SELECT COUNT(*) as count FROM user_roles WHERE user_id = ?').get(ownerId) as CountResult;
+      
+      if (!userExists || userExists.count === 0) {
+        this.db.run(
+          'INSERT INTO user_roles (user_id, role) VALUES (?, ?)',
+          [ownerId, 'OWNER']
+        );
+      }
     }
   }
 
