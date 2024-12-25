@@ -31,24 +31,28 @@ export class UserDatabase {
       );
     `);
 
+    // New table for settings
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+
     // Check if owner exists
-    const ownerExists = this.db.prepare('SELECT COUNT(*) as count FROM user_roles WHERE role = ?').get('OWNER') as CountResult;
+    const ownerExists = this.db.prepare('SELECT COUNT(*) as count FROM user_roles WHERE role = ?').get(UserRole.OWNER) as CountResult;
     
     if (ownerExists && ownerExists.count === 0) {
       const ownerId = Number(process.env.DEFAULT_OWNER_ID);
       if (isNaN(ownerId)) {
         throw new Error("DEFAULT_OWNER_ID must be set in environment variables");
       }
-      
-      // Add check to ensure user doesn't already exist
-      const userExists = this.db.prepare('SELECT COUNT(*) as count FROM user_roles WHERE user_id = ?').get(ownerId) as CountResult;
-      
-      if (!userExists || userExists.count === 0) {
-        this.db.run(
-          'INSERT INTO user_roles (user_id, role) VALUES (?, ?)',
-          [ownerId, 'OWNER']
-        );
-      }
+
+      // Всегда устанавливаем роль owner для DEFAULT_OWNER_ID
+      this.db.run(
+        "INSERT OR REPLACE INTO user_roles (user_id, role) VALUES (?, ?)",
+        [ownerId, UserRole.OWNER]
+      );
     }
   }
 
@@ -78,6 +82,21 @@ export class UserDatabase {
   isAdmin(userId: number): boolean {
     const role = this.getUserRole(userId);
     return role === UserRole.OWNER || role === UserRole.ADMIN;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db.run(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+      [key, value]
+    );
+  }
+
+  getSetting(key: string): string | null {
+    const result = this.db.query(
+      "SELECT value FROM settings WHERE key = ?"
+    ).get(key) as { value: string } | null;
+
+    return result ? result.value : null;
   }
 
   close() {

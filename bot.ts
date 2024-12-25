@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { projects } from './projectsConfig';
 import { airdropWorker } from './airdropWorker';
 import { userDb, UserRole } from './database';
+import { auditLogger } from './audit';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -61,6 +62,12 @@ bot.command('addadmin', requireOwner, async (ctx) => {
   }
 
   userDb.setUserRole(targetUserId, UserRole.ADMIN);
+  await auditLogger.logAdminAction(
+    ctx.from.id,
+    ctx.from.username,
+    'Добавление админа',
+    targetUserId
+  );
   await ctx.reply(`Пользователь ${targetUserId} назначен администратором.`);
 });
 
@@ -80,6 +87,28 @@ bot.command('removeadmin', requireOwner, async (ctx) => {
 
   userDb.removeUserRole(targetUserId);
   await ctx.reply(`Пользователь ${targetUserId} больше не является администратором.`);
+});
+
+// Команда для установки текущей группы как канала аудита
+bot.command('setauditgroup', requireOwner, async (ctx) => {
+  if (!ctx.chat) return;
+  
+  // Проверяем, что команда отправлена в группу/супергруппу
+  if (ctx.chat.type !== 'group' && ctx.chat.type !== 'supergroup') {
+    await ctx.reply('Эта команда должна быть использована в группе');
+    return;
+  }
+
+  auditLogger.setAuditChannel(ctx.chat.id.toString());
+  await ctx.reply('✅ Эта группа установлена как канал аудита');
+  
+  // Тестовое сообщение
+  await auditLogger.logAdminAction(
+    ctx.from.id,
+    ctx.from.username,
+    'Установка группы аудита',
+    ctx.from.id
+  );
 });
 
 // Start command
@@ -113,6 +142,14 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: any
     return;
   }
 
+  // Add audit log
+  await auditLogger.logAddressCheck(
+    ctx.from.id,
+    ctx.from.username,
+    project.name,
+    addresses.length
+  );
+
   await ctx.deleteMessage();
 
   const results = await Promise.all(addresses.map(address => 
@@ -124,7 +161,7 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: any
   const responseMessage = `Результаты для ${project.name}:\n` + results.join('\n');
   
   await ctx.telegram.editMessageText(
-    ctx.chat.id,  // Now TypeScript knows ctx.chat exists
+    ctx.chat.id,
     ctx.session.promptMessageId,
     undefined,
     responseMessage,
@@ -136,6 +173,9 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: any
       }
     }
   );
+
+  // Сбрасываем выбранный проект после обработки адресов
+  ctx.session.selectedProject = undefined;
 }
 
 // Handle project selection and back button
@@ -149,6 +189,7 @@ bot.on('callback_query', async (ctx: MyContext) => {
   
   // Handle back button
   if (data === 'back') {
+    ctx.session.selectedProject = undefined;  // Очищаем выбранный проект
     await ctx.editMessageText('Добро пожаловать! Выберите проект для проверки возможности участия в airdrop:', {
       reply_markup: {
         inline_keyboard: [projects.map((project) => ({
@@ -182,32 +223,55 @@ bot.on('callback_query', async (ctx: MyContext) => {
           }
         }
       );
+    }
+  }
+});
 
-      // Обработка текстовых сообщений
-      bot.on('text', async (ctx) => {
-        const addresses = ctx.message.text.split('\n').map(addr => addr.trim()).filter(addr => addr);
-        await handleAddresses(ctx, addresses, project);
-      });
+// Обработка текстовых сообщений
+bot.on('text', async (ctx: MyContext) => {
+  // Пропускаем команды
+  if (ctx.message.text.startsWith('/')) return;
 
-      // Обработка документов
-      bot.on('document', async (ctx) => {
-        if (ctx.message.document.mime_type !== 'text/plain') {
-          await ctx.reply('Пожалуйста, отправьте текстовый файл (.txt)');
-          return;
-        }
+  // Логируем сообщение
+  await auditLogger.logMessage(
+    ctx.from.id,
+    ctx.from.username,
+    ctx.message.text
+  );
 
-        try {
-          const file = await ctx.telegram.getFile(ctx.message.document.file_id);
-          const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-          const response = await fetch(fileUrl);
-          const text = await response.text();
-          
-          const addresses = text.split('\n').map(addr => addr.trim()).filter(addr => addr);
-          await handleAddresses(ctx, addresses, project);
-        } catch (error) {
-          await ctx.reply('Ошибка при чтении файла. Пожалуйста, убедитесь, что это текстовый файл с адресами.');
-        }
-      });
+  // Обрабатываем адреса только если выбран проект
+  if (ctx.session?.selectedProject) {
+    const addresses = ctx.message.text.split('\n').map(addr => addr.trim()).filter(addr => addr);
+    await handleAddresses(ctx, addresses, ctx.session.selectedProject);
+  }
+});
+
+// Обработка документов
+bot.on('document', async (ctx: MyContext) => {
+  // Логируем получение файла
+  await auditLogger.logMessage(
+    ctx.from.id,
+    ctx.from.username,
+    `[Файл: ${ctx.message.document.file_name || 'без имени'}]`
+  );
+
+  // Обрабатываем файл только если выбран проект
+  if (ctx.session?.selectedProject) {
+    if (ctx.message.document.mime_type !== 'text/plain') {
+      await ctx.reply('Пожалуйста, отправьте текстовый файл (.txt)');
+      return;
+    }
+
+    try {
+      const file = await ctx.telegram.getFile(ctx.message.document.file_id);
+      const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+      const response = await fetch(fileUrl);
+      const text = await response.text();
+      
+      const addresses = text.split('\n').map(addr => addr.trim()).filter(addr => addr);
+      await handleAddresses(ctx, addresses, ctx.session.selectedProject);
+    } catch (error) {
+      await ctx.reply('Ошибка при чтении файла. Пожалуйста, убедитесь, что это текстовый файл с адресами.');
     }
   }
 });
