@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+        
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+        # Using --frozen-lockfile ensures we use exact versions from bun.lockb
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Run ESLint
+        run: bun run lint
+
+      - name: Type check
+        run: bun run typecheck
+
+      # Add a summary of the checks
+      - name: Check Summary
+        if: always()
+        run: |
+          echo "### CI Check Results :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "* Linting: ${{ job.steps.lint.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "* Type Check: ${{ job.steps.typecheck.outcome }}" >> $GITHUB_STEP_SUMMARY 

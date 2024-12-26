@@ -9,7 +9,9 @@
     "dev": "bun --watch bot.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "ci": "bun run lint && bun run typecheck"
   },
   "keywords": [],
   "author": "",
