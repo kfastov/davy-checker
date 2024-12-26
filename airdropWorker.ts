@@ -46,7 +46,7 @@ class AirdropWorker {
 
   private async checkAirdropEligibility(project: Project, address: string): Promise<string> {
     try {
-      const url = `${project.apiEndpoint}${address}`;
+      const url = project.apiEndpoint.replace('{address}', address);
       const options: RequestInit = {};
 
       if (this.useProxies) {
