@@ -7,7 +7,7 @@ interface Task {
   project: Project;
   address: string;
   resolve: (result: string) => void;
-  reject: (error: any) => void;
+  reject: (error: Error | unknown) => void;
 }
 
 class AirdropWorker {

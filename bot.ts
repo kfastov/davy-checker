@@ -1,7 +1,7 @@
 import { Telegraf, session, Context } from 'telegraf';
 import { type CallbackQuery } from 'telegraf/types';
 import dotenv from 'dotenv';
-import { projects } from './projectsConfig';
+import { projects, type Project } from './projectsConfig';
 import { airdropWorker } from './airdropWorker';
 import { userDb, UserRole } from './database';
 import { auditLogger } from './audit';
@@ -11,7 +11,7 @@ dotenv.config({ path: '.env.local' });
 
 interface SessionData {
   promptMessageId?: number;
-  selectedProject?: any;
+  selectedProject?: Project;
 }
 
 interface MyContext extends Context {
@@ -28,7 +28,8 @@ bot.use(session());
 const MAX_ADDRESSES = 80;
 
 // Middleware для проверки прав админа
-const requireAdmin = async (ctx: any, next: () => Promise<void>) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const requireAdmin = async (ctx: MyContext, next: () => Promise<void>) => {
   const userId = ctx.from?.id;
   if (!userId || !userDb.isAdmin(userId)) {
     await ctx.reply('У вас нет прав для выполнения этой команды.');
@@ -38,7 +39,7 @@ const requireAdmin = async (ctx: any, next: () => Promise<void>) => {
 };
 
 // Middleware для проверки прав овнера
-const requireOwner = async (ctx: any, next: () => Promise<void>) => {
+const requireOwner = async (ctx: MyContext, next: () => Promise<void>) => {
   const userId = ctx.from?.id;
   if (!userId || !userDb.isOwner(userId)) {
     await ctx.reply('Только владелец бота может выполнять эту команду.');
@@ -117,7 +118,7 @@ bot.start(async (ctx) => {
 });
 
 // Function to send the list of projects
-async function sendProjectList(ctx: any) {
+async function sendProjectList(ctx: MyContext) {
   await ctx.reply('Добро пожаловать! Выберите проект для проверки возможности участия в airdrop:', {
     reply_markup: {
       inline_keyboard: [projects.map((project) => ({
@@ -134,7 +135,7 @@ function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
 }
 
 // Handle text messages and documents with addresses
-async function handleAddresses(ctx: MyContext, addresses: string[], project: any) {
+async function handleAddresses(ctx: MyContext, addresses: string[], project: Project) {
   if (!ctx.chat || !ctx.from) return;  // Early return if no chat context
   
   if (addresses.length > MAX_ADDRESSES) {
@@ -271,6 +272,7 @@ bot.on('document', async (ctx) => {
       const addresses = text.split('\n').map(addr => addr.trim()).filter(addr => addr);
       await handleAddresses(ctx, addresses, ctx.session.selectedProject);
     } catch (error) {
+      console.error('File reading error:', error);
       await ctx.reply('Ошибка при чтении файла. Пожалуйста, убедитесь, что это текстовый файл с адресами.');
     }
   }
