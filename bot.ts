@@ -135,7 +135,7 @@ function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
 
 // Handle text messages and documents with addresses
 async function handleAddresses(ctx: MyContext, addresses: string[], project: any) {
-  if (!ctx.chat) return;  // Early return if no chat context
+  if (!ctx.chat || !ctx.from) return;  // Early return if no chat context
   
   if (addresses.length > MAX_ADDRESSES) {
     await ctx.reply(`Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`);
@@ -179,7 +179,7 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: any
 }
 
 // Handle project selection and back button
-bot.on('callback_query', async (ctx: MyContext) => {
+bot.on('callback_query', async (ctx) => {
   if (!ctx.callbackQuery) return;
   const callbackQuery = ctx.callbackQuery;
   
@@ -228,7 +228,7 @@ bot.on('callback_query', async (ctx: MyContext) => {
 });
 
 // Обработка текстовых сообщений
-bot.on('text', async (ctx: MyContext) => {
+bot.on('text', async (ctx) => {
   // Пропускаем команды
   if (ctx.message.text.startsWith('/')) return;
 
@@ -241,13 +241,13 @@ bot.on('text', async (ctx: MyContext) => {
 
   // Обрабатываем адреса только если выбран проект
   if (ctx.session?.selectedProject) {
-    const addresses = ctx.message.text.split('\n').map(addr => addr.trim()).filter(addr => addr);
+    const addresses = ctx.message.text.split('\n').map((addr: string) => addr.trim()).filter((addr: string) => addr);
     await handleAddresses(ctx, addresses, ctx.session.selectedProject);
   }
 });
 
 // Обработка документов
-bot.on('document', async (ctx: MyContext) => {
+bot.on('document', async (ctx) => {
   // Логируем получение файла
   await auditLogger.logMessage(
     ctx.from.id,

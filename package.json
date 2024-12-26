@@ -7,7 +7,9 @@
   "scripts": {
     "start": "bun run bot.ts",
     "dev": "bun --watch bot.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +17,10 @@
   "description": "",
   "devDependencies": {
     "@flydotio/dockerfile": "^0.5.9",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^8.18.2",
+    "@typescript-eslint/parser": "^8.18.2",
+    "eslint": "^9.17.0"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
