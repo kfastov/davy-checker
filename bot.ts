@@ -113,8 +113,40 @@ bot.command('setauditgroup', requireOwner, async (ctx) => {
   );
 });
 
+// Команда статистики (только для админов)
+bot.command('stats', requireAdmin, async (ctx) => {
+  const stats = userDb.getStats();
+  
+  let message = `📊 Статистика бота:
+
+👥 Всего пользователей: ${stats.totalUsers}
+👮‍♂️ Администраторов: ${stats.admins}
+👤 Обычных пользователей: ${stats.users}
+🔍 Всего проверок адресов: ${stats.totalChecks}`;
+
+  if (stats.topUsers.length > 0) {
+    message += '\n\n📈 Топ-5 пользователей по количеству проверок:';
+    for (const user of stats.topUsers) {
+      const userDisplay = user.username ? `@${user.username}` : `ID: ${user.userId}`;
+      message += `\n${userDisplay}: ${user.checks} проверок`;
+    }
+  }
+
+  await ctx.reply(message);
+});
+
 // Start command
 bot.start(async (ctx) => {
+  if (ctx.from) {
+    userDb.addUser(ctx.from.id, ctx.from.username);
+    
+    await auditLogger.logSystemEvent(
+      ctx.from.id,
+      ctx.from.username,
+      'Начал использовать бота'
+    );
+  }
+  
   sendProjectList(ctx);
 });
 
@@ -231,6 +263,9 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: Pro
 
   // Сбрасываем выбранный проект после обработки адресов
   ctx.session.selectedProject = undefined;
+
+  // После успешной проверки адресов увеличиваем счетчик
+  userDb.incrementAddressChecks(ctx.from.id);
 }
 
 // Handle project selection and back button

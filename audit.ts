@@ -62,6 +62,20 @@ class AuditLogger {
       console.error('Failed to send audit log:', error);
     }
   }
+
+  async logSystemEvent(userId: number, username: string | undefined, event: string) {
+    if (!this.auditChannelId) return;
+    
+    const message = `🤖 Системное событие
+👤 Пользователь: ${username ? `@${username}` : userId}
+📋 Событие: ${event}`;
+
+    try {
+      await this.bot.telegram.sendMessage(this.auditChannelId, message);
+    } catch (error) {
+      console.error('Failed to send audit log:', error);
+    }
+  }
 }
 
 export const auditLogger = new AuditLogger();
