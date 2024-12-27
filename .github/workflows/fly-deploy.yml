@@ -22,8 +22,9 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - run: flyctl deploy --remote-only
+      - run: >
+          flyctl deploy --remote-only 
+          --build-arg COMMIT_HASH=${{ steps.commit.outputs.hash }}
+          --build-arg COMMIT_MESSAGE=${{ steps.commit.outputs.message }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          COMMIT_HASH: ${{ steps.commit.outputs.hash }}
-          COMMIT_MESSAGE: ${{ steps.commit.outputs.message }}
