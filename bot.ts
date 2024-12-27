@@ -404,12 +404,18 @@ process.once('SIGTERM', () => {
   });
 });
 
-// Логируем запуск бота
+// Логируем запуск бота и проверяем обновление версии
 auditLogger.logSystemEvent(
   0,
   undefined,
   `🤖 Бот запущен${process.env.COMMIT_HASH ? ` (${process.env.COMMIT_HASH})` : ''}`
-);
+).then(() => checkVersionUpdate());
+
+// Запускаем бота
+bot.launch()
+  .catch(error => {
+    console.error('Failed to start bot:', error);
+  });
 
 // Функция для проверки обновления версии
 async function checkVersionUpdate() {
@@ -433,13 +439,3 @@ async function checkVersionUpdate() {
     userDb.setCommitHash(currentHash);
   }
 }
-
-// Модифицируем запуск бота
-bot.launch()
-  .then(() => {
-    // Проверяем обновление версии при запуске
-    return checkVersionUpdate();
-  })
-  .catch(error => {
-    console.error('Failed to start bot:', error);
-  });
