@@ -244,6 +244,14 @@ export class UserDatabase {
         last_check_at = CURRENT_TIMESTAMP
     `, [userId]);
   }
+
+  getCommitHash(): string | null {
+    return this.getSetting('commit_hash');
+  }
+
+  setCommitHash(hash: string) {
+    this.setSetting('commit_hash', hash);
+  }
 }
 
 // Экспортируем синглтон для использования в других модулях

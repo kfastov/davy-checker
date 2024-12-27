@@ -11,7 +11,12 @@ WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV="production"
-
+# Add build-time arguments for commit info
+ARG COMMIT_HASH
+ARG COMMIT_MESSAGE
+# Set them as environment variables
+ENV COMMIT_HASH=${COMMIT_HASH}
+ENV COMMIT_MESSAGE=${COMMIT_MESSAGE}
 
 # Throw-away build stage to reduce size of final image
 FROM base as build

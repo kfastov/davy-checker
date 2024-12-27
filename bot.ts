@@ -72,7 +72,7 @@ bot.command('addadmin', requireOwner, async (ctx) => {
   await ctx.reply(`Пользователь ${targetUserId} назначен администратором.`);
 });
 
-// Команда для удаления админа (только для овнера)
+// Команда для удаления админа (только д��я овнера)
 bot.command('removeadmin', requireOwner, async (ctx) => {
   const args = ctx.message.text.split(' ');
   if (args.length !== 2) {
@@ -406,12 +406,40 @@ process.once('SIGTERM', () => {
 
 // Логируем запуск бота
 auditLogger.logSystemEvent(
-  0, // системный ID для событий бота
+  0, // си��темный ID для событий бота
   undefined,
   '🤖 Бот запущен'
 );
 
-// Launch the bot
-bot.launch().catch(error => {
-  console.error('Failed to start bot:', error);
-});
+// Функция для проверки обновления версии
+async function checkVersionUpdate() {
+  const currentHash = process.env.COMMIT_HASH;
+  if (!currentHash) return;
+
+  const savedHash = userDb.getCommitHash();
+  
+  // Если хэш изменился или его не было раньше
+  if (savedHash !== currentHash) {
+    const commitMessage = process.env.COMMIT_MESSAGE || 'Нет описания';
+    
+    // Логируем обновление
+    await auditLogger.logSystemEvent(
+      0,
+      undefined,
+      `🆕 Бот обновлен до версии ${currentHash}\n📝 Изменения: ${commitMessage}`
+    );
+    
+    // Сохраняем новый хэш
+    userDb.setCommitHash(currentHash);
+  }
+}
+
+// Модифицируем запуск бота
+bot.launch()
+  .then(() => {
+    // Проверяем обновление версии при запуске
+    return checkVersionUpdate();
+  })
+  .catch(error => {
+    console.error('Failed to start bot:', error);
+  });
