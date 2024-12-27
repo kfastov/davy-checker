@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 
+const DB_PATH = process.env.DB_PATH || "/data/users.sqlite";
+
 export enum UserRole {
   OWNER = 'owner',
   ADMIN = 'admin',
@@ -17,7 +19,7 @@ export class UserDatabase {
   private db: Database;
 
   constructor() {
-    this.db = new Database("users.sqlite", { create: true });
+    this.db = new Database(DB_PATH, { create: true });
     this.init();
   }
 
