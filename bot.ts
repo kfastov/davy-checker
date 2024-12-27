@@ -370,7 +370,7 @@ bot.on('document', async (ctx) => {
     `[Файл: ${ctx.message.document.file_name || 'без имени'}]`
   );
 
-  // Обрабатываем файл только если выбран проект
+  // Обрабатываем файл только если выбран про��кт
   if (ctx.session?.selectedProject) {
     if (ctx.message.document.mime_type !== 'text/plain') {
       await ctx.reply('Пожалуйста, отправьте текстовый файл (.txt)');
@@ -392,5 +392,27 @@ bot.on('document', async (ctx) => {
   }
 });
 
+// Enable graceful stop
+process.once('SIGINT', () => {
+  auditLogger.logSystemEvent(0, undefined, '🔄 Бот остановлен (SIGINT)').finally(() => {
+    bot.stop('SIGINT');
+  });
+});
+
+process.once('SIGTERM', () => {
+  auditLogger.logSystemEvent(0, undefined, '🔄 Бот остановлен (SIGTERM)').finally(() => {
+    bot.stop('SIGTERM');
+  });
+});
+
+// Логируем запуск бота
+auditLogger.logSystemEvent(
+  0, // системный ID для событий бота
+  undefined,
+  '🤖 Бот запущен'
+);
+
 // Launch the bot
-bot.launch();
+bot.launch().catch(error => {
+  console.error('Failed to start bot:', error);
+});
