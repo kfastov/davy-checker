@@ -5,6 +5,7 @@ import { projects, type Project } from './projectsConfig';
 import { airdropWorker } from './airdropWorker';
 import { userDb, UserRole } from './database';
 import { auditLogger } from './audit';
+import { validateAddress, getAddressTypeDisplay } from './addressTypes';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -138,8 +139,25 @@ function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
 async function handleAddresses(ctx: MyContext, addresses: string[], project: Project) {
   if (!ctx.chat || !ctx.from) return;  // Early return if no chat context
   
-  if (addresses.length > MAX_ADDRESSES) {
+  // Дедупликация адресов и валидация
+  const uniqueAddresses = [...new Set(addresses.map(addr => addr.trim().toLowerCase()))];
+  
+  if (uniqueAddresses.length > MAX_ADDRESSES) {
     await ctx.reply(`Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`);
+    return;
+  }
+
+  // Валидация адресов
+  const validationResults = uniqueAddresses.map(address => ({
+    address,
+    isValid: validateAddress(address, project.addressType)
+  }));
+
+  const validAddresses = validationResults.filter(r => r.isValid).map(r => r.address);
+  const invalidAddresses = validationResults.filter(r => !r.isValid).map(r => r.address);
+
+  if (validAddresses.length === 0) {
+    await ctx.reply('Не найдено корректных адресов для проверки.');
     return;
   }
 
@@ -148,18 +166,54 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: Pro
     ctx.from.id,
     ctx.from.username,
     project.name,
-    addresses.length
+    validAddresses.length
   );
 
   await ctx.deleteMessage();
 
-  const results = await Promise.all(addresses.map(address => 
+  const results = await Promise.all(validAddresses.map(address => 
     airdropWorker.addTask(project, address)
-      .then((airdropAmount: string) => `Адрес: ${address}, Airdrop: ${airdropAmount}`)
-      .catch(() => `Адрес: ${address}, Ошибка при проверке возможности`)
+      .then((airdropAmount: string) => ({ address, airdropAmount, error: false }))
+      .catch(() => ({ address, airdropAmount: '0', error: true }))
   ));
 
-  const responseMessage = `Результаты для ${project.name}:\n` + results.join('\n');
+  // Группируем результаты
+  const eligible = results.filter(r => !r.error && r.airdropAmount !== '0');
+  const notEligible = results.filter(r => !r.error && r.airdropAmount === '0');
+  const errors = results.filter(r => r.error);
+
+  let responseMessage = `Результаты для ${project.name}:\n\n`;
+  
+  if (eligible.length > 0) {
+    responseMessage += '✅ Eligible:\n';
+    eligible.forEach(r => {
+      responseMessage += `${r.address}: ${r.airdropAmount}\n`;
+    });
+    responseMessage += '\n';
+  }
+
+  if (notEligible.length > 0) {
+    responseMessage += '❌ Not Eligible:\n';
+    notEligible.forEach(r => {
+      responseMessage += `${r.address}\n`;
+    });
+    responseMessage += '\n';
+  }
+
+  if (errors.length > 0) {
+    responseMessage += '⚠️ Ошибки проверки:\n';
+    errors.forEach(r => {
+      responseMessage += `${r.address}\n`;
+    });
+    responseMessage += '\n';
+  }
+
+  if (invalidAddresses.length > 0) {
+    responseMessage += '🚫 Некорректные адреса:\n';
+    invalidAddresses.forEach(address => {
+      responseMessage += `${address}\n`;
+    });
+  }
   
   await ctx.telegram.editMessageText(
     ctx.chat.id,
@@ -214,8 +268,10 @@ bot.on('callback_query', async (ctx) => {
         selectedProject: project
       };
 
+      const addressTypeText = getAddressTypeDisplay(project.addressType);
+
       await ctx.editMessageText(
-        `Вы выбрали ${project.name}. Пожалуйста, введите ваши адреса (каждый адрес на новой строке, максимум ${MAX_ADDRESSES}) или отправьте их текстовым файлом:`,
+        `Вы выбрали ${project.name}.\nПожалуйста, введите ${addressTypeText} (каждый адрес на новой строке, максимум ${MAX_ADDRESSES}) или отправьте их текстовым файлом:`,
         {
           reply_markup: {
             inline_keyboard: [
@@ -249,7 +305,7 @@ bot.on('text', async (ctx) => {
 
 // Обработка документов
 bot.on('document', async (ctx) => {
-  // Логируем получение файла
+  // Логируем полученное файла
   await auditLogger.logMessage(
     ctx.from.id,
     ctx.from.username,
