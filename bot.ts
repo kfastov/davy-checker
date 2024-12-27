@@ -29,7 +29,6 @@ bot.use(session());
 const MAX_ADDRESSES = 80;
 
 // Middleware для проверки прав админа
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const requireAdmin = async (ctx: MyContext, next: () => Promise<void>) => {
   const userId = ctx.from?.id;
   if (!userId || !userDb.isAdmin(userId)) {
@@ -370,7 +369,7 @@ bot.on('document', async (ctx) => {
     `[Файл: ${ctx.message.document.file_name || 'без имени'}]`
   );
 
-  // Обрабатываем файл только если выбран про��кт
+  // Обрабатываем файл только если выбран проект
   if (ctx.session?.selectedProject) {
     if (ctx.message.document.mime_type !== 'text/plain') {
       await ctx.reply('Пожалуйста, отправьте текстовый файл (.txt)');
