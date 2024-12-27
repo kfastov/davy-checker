@@ -167,19 +167,42 @@ function isDataQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
   return (query as CallbackQuery.DataQuery).data !== undefined;
 }
 
+// Вспомогательная функция для обработки ошибок
+async function handleError(ctx: MyContext, errorMessage: string) {
+  // Удаляем сообщение пользователя
+  await ctx.deleteMessage();
+  
+  // Редактируем предыдущее сообщение с ошибкой
+  await ctx.telegram.editMessageText(
+    ctx.chat!.id,
+    ctx.session.promptMessageId,
+    undefined,
+    errorMessage,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'Назад', callback_data: 'back' }]
+        ]
+      }
+    }
+  );
+}
+
 // Handle text messages and documents with addresses
 async function handleAddresses(ctx: MyContext, addresses: string[], project: Project) {
-  if (!ctx.chat || !ctx.from) return;  // Early return if no chat context
+  if (!ctx.chat || !ctx.from) return;
   
-  // Дедупликация адресов и валидация
+  // Remove duplicates
   const uniqueAddresses = [...new Set(addresses.map(addr => addr.trim().toLowerCase()))];
   
   if (uniqueAddresses.length > MAX_ADDRESSES) {
-    await ctx.reply(`Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`);
+    await handleError(ctx, 
+      `⚠️ Вы ввели слишком много адресов. Пожалуйста, введите не более ${MAX_ADDRESSES} адресов.`
+    );
     return;
   }
 
-  // Валидация адресов
+  // Validate addresses
   const validationResults = uniqueAddresses.map(address => ({
     address,
     isValid: validateAddress(address, project.addressType)
@@ -189,7 +212,7 @@ async function handleAddresses(ctx: MyContext, addresses: string[], project: Pro
   const invalidAddresses = validationResults.filter(r => !r.isValid).map(r => r.address);
 
   if (validAddresses.length === 0) {
-    await ctx.reply('Не найдено корректных адресов для проверки.');
+    await handleError(ctx, '❌ Не найдено корректных адресов для проверки.');
     return;
   }
 
