@@ -5,17 +5,21 @@ import { userDb } from './database';
 dotenv.config({ path: '.env.local' });
 
 // Добавляем тип для разных видов сообщений
-type MessageType = 'user' | 'system' | 'admin';
+type MessageType = 'user' | 'system' | 'admin' | 'user_action';
 
 // Модифицируем функцию форматирования сообщения
 function formatMessage(userId: number, username: string | undefined, message: string, type: MessageType): string {
+  const userInfo = username ? `@${username}` : userId;
+  
   switch (type) {
     case 'system':
       return `🤖 Система: ${message}`;
     case 'admin':
-      return `👮 Админ: ${username ? `@${username}` : userId}\n${message}`;
+      return `👮 Админ: ${userInfo}\n${message}`;
+    case 'user_action':
+      return `⚡️ Действие: ${message}\n👤 Пользователь: ${userInfo}`;
     default:
-      return `👤 Пользователь: ${username ? `@${username}` : userId}\n${message}`;
+      return `👤 Пользователь: ${userInfo}\n${message}`;
   }
 }
 
@@ -58,6 +62,10 @@ class AuditLogger {
 
   async logSystemEvent(userId: number, username: string | undefined, message: string): Promise<void> {
     await this.log(formatMessage(userId, username, message, 'system'));
+  }
+
+  async logUserAction(userId: number, username: string | undefined, action: string): Promise<void> {
+    await this.log(formatMessage(userId, username, action, 'user_action'));
   }
 
   private async log(message: string) {

@@ -139,7 +139,7 @@ bot.start(async (ctx) => {
   if (ctx.from) {
     userDb.addUser(ctx.from.id, ctx.from.username);
     
-    await auditLogger.logSystemEvent(
+    await auditLogger.logUserAction(
       ctx.from.id,
       ctx.from.username,
       'Начал использовать бота'
