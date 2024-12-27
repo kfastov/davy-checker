@@ -4,6 +4,21 @@ import { userDb } from './database';
 
 dotenv.config({ path: '.env.local' });
 
+// Добавляем тип для разных видов сообщений
+type MessageType = 'user' | 'system' | 'admin';
+
+// Модифицируем функцию форматирования сообщения
+function formatMessage(userId: number, username: string | undefined, message: string, type: MessageType): string {
+  switch (type) {
+    case 'system':
+      return `🤖 Система: ${message}`;
+    case 'admin':
+      return `👮 Админ: ${username ? `@${username}` : userId}\n${message}`;
+    default:
+      return `👤 Пользователь: ${username ? `@${username}` : userId}\n${message}`;
+  }
+}
+
 class AuditLogger {
   private auditChannelId: string | null = null;
   private bot: Telegraf;
@@ -18,19 +33,8 @@ class AuditLogger {
     userDb.setSetting('audit_channel_id', channelId);
   }
 
-  async logMessage(userId: number, username: string | undefined, message: string) {
-    if (!this.auditChannelId) return;
-    
-    const truncatedMessage = message.length > 100 ? message.slice(0, 97) + '...' : message;
-    const logMessage = `📨 Сообщение
-👤 Пользователь: ${username ? `@${username}` : userId}
-💬 Текст: ${truncatedMessage}`;
-
-    try {
-      await this.bot.telegram.sendMessage(this.auditChannelId, logMessage);
-    } catch (error) {
-      console.error('Failed to send audit log:', error);
-    }
+  async logMessage(userId: number, username: string | undefined, message: string): Promise<void> {
+    await this.log(formatMessage(userId, username, message, 'user'));
   }
 
   async logAddressCheck(userId: number, username: string | undefined, projectName: string, addressCount: number) {
@@ -48,28 +52,17 @@ class AuditLogger {
     }
   }
 
-  async logAdminAction(adminId: number, username: string | undefined, action: string, targetUserId: number) {
-    if (!this.auditChannelId) return;
-    
-    const message = `👮‍♂️ Административное действие
-🔑 Админ: ${username ? `@${username}` : adminId}
-📋 Действие: ${action}
-👤 Цель: ${targetUserId}`;
-
-    try {
-      await this.bot.telegram.sendMessage(this.auditChannelId, message);
-    } catch (error) {
-      console.error('Failed to send audit log:', error);
-    }
+  async logAdminAction(userId: number, username: string | undefined, action: string, targetId: number): Promise<void> {
+    await this.log(formatMessage(userId, username, `${action} (target: ${targetId})`, 'admin'));
   }
 
-  async logSystemEvent(userId: number, username: string | undefined, event: string) {
+  async logSystemEvent(userId: number, username: string | undefined, message: string): Promise<void> {
+    await this.log(formatMessage(userId, username, message, 'system'));
+  }
+
+  private async log(message: string) {
     if (!this.auditChannelId) return;
     
-    const message = `🤖 Системное событие
-👤 Пользователь: ${username ? `@${username}` : userId}
-📋 Событие: ${event}`;
-
     try {
       await this.bot.telegram.sendMessage(this.auditChannelId, message);
     } catch (error) {
